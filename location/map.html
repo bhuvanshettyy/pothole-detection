@@ -1,0 +1,163 @@
+
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Pothole Detection Map</title>
+            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"/>
+            <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+            <style>
+                html, body { height: 100%; margin: 0; padding: 0; }
+                #map { height: 100vh; width: 100%; }
+                #coordinates { 
+                    position: absolute; 
+                    bottom: 20px; 
+                    left: 50%; 
+                    transform: translateX(-50%);
+                    background: white;
+                    padding: 10px;
+                    border-radius: 5px;
+                    z-index: 1000;
+                    max-width: 80%;
+                    text-align: center;
+                }
+            </style>
+        </head>
+        <body>
+            <div id="map"></div>
+            <div id="coordinates">
+                <div id="status"></div>
+            </div>
+            <script>
+                // Initialize map
+                var map = L.map('map').setView([15.3173, 75.7139], 7);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(map);
+
+                // Add zoom controls
+                L.control.zoom({
+                    position: 'bottomright'
+                }).addTo(map);
+
+                // Global variables
+                var markers = [];
+                var routeLayer = null;
+                var potholeMarkers = [];
+
+                // Function to add pothole markers
+                function addPotholeMarkers(potholeData) {
+                    // Clear existing markers
+                    potholeMarkers.forEach(marker => map.removeLayer(marker));
+                    potholeMarkers = [];
+
+                    potholeData.forEach(function(pothole) {
+                        var color = pothole.severity === 'High' ? 'red' : 
+                                   pothole.severity === 'Moderate' ? 'orange' : 'green';
+                        
+                        var marker = L.circleMarker([pothole.lat, pothole.lng], {
+                            radius: 8,
+                            fillColor: color,
+                            color: '#fff',
+                            weight: 1,
+                            opacity: 1,
+                            fillOpacity: 0.8
+                        }).bindPopup('Potholes: ' + pothole.count + '<br>Severity: ' + pothole.severity);
+                        
+                        marker.addTo(map);
+                        potholeMarkers.push(marker);
+                    });
+                }
+
+                // Function to draw route
+                function drawRoute(start_lat, start_lng, end_lat, end_lng) {
+                    if (routeLayer) {
+                        map.removeLayer(routeLayer);
+                    }
+                    
+                    document.getElementById('status').innerHTML = 'Fetching route...';
+                    
+                    var start = L.latLng(start_lat, start_lng);
+                    var end = L.latLng(end_lat, end_lng);
+                    
+                    // Add start and end markers
+                    L.marker(start, {icon: L.icon({
+                        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+                        iconSize: [25, 41],
+                        iconAnchor: [12, 41]
+                    })}).addTo(map);
+                    
+                    L.marker(end, {icon: L.icon({
+                        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+                        iconSize: [25, 41],
+                        iconAnchor: [12, 41]
+                    })}).addTo(map);
+
+                    fetch(`https://router.project-osrm.org/route/v1/driving/${start_lng},${start_lat};${end_lng},${end_lat}?overview=full&geometries=geojson`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.routes && data.routes[0]) {
+                                var coordinates = data.routes[0].geometry.coordinates;
+                                var points = coordinates.map(coord => [coord[1], coord[0]]);
+                                
+                                routeLayer = L.polyline(points, {
+                                    color: 'blue',
+                                    weight: 5,
+                                    opacity: 0.7
+                                }).addTo(map);
+                                
+                                document.getElementById('status').innerHTML = 'Route found!';
+                                map.fitBounds(routeLayer.getBounds(), { padding: [50, 50] });
+                            } else {
+                                throw new Error('No route found');
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            routeLayer = L.polyline([[start_lat, start_lng], [end_lat, end_lng]], {
+                                color: 'blue',
+                                weight: 5,
+                                opacity: 0.7,
+                                dashArray: '10, 10'
+                            }).addTo(map);
+                            
+                            document.getElementById('status').innerHTML = 'Showing direct line between points';
+                            map.fitBounds(L.latLngBounds([start, end]), { padding: [50, 50] });
+                        });
+                }
+
+                // Handle map clicks for manual route selection
+                map.on('click', function(e) {
+                    if (markers.length < 2) {
+                        var marker = L.marker(e.latlng).addTo(map);
+                        markers.push(marker);
+                        
+                        var pointText = 'Point ' + markers.length + ': ' + e.latlng.lat.toFixed(6) + ', ' + e.latlng.lng.toFixed(6);
+                        document.getElementById('coordinates').innerHTML = 
+                            '<div>Click on the map to select start and end points</div>' +
+                            '<div>' + pointText + '</div>' +
+                            '<div id="status"></div>';
+                    }
+                    
+                    if (markers.length === 2) {
+                        var startCoords = markers[0].getLatLng();
+                        var endCoords = markers[1].getLatLng();
+                        drawRoute(startCoords.lat, startCoords.lng, endCoords.lat, endCoords.lng);
+                    }
+                });
+
+                // Handle right-click to clear
+                map.on('contextmenu', function(e) {
+                    markers.forEach(marker => map.removeLayer(marker));
+                    markers = [];
+                    if (routeLayer) {
+                        map.removeLayer(routeLayer);
+                        routeLayer = null;
+                    }
+                    document.getElementById('coordinates').innerHTML = 
+                        '<div>Click on the map to select start and end points</div>' +
+                        '<div id="status"></div>';
+                });
+            </script>
+        </body>
+        </html>
+        
