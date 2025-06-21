@@ -1,0 +1,85 @@
+
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Select Location</title>
+                <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"/>
+                <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+                <style>
+                    #map { height: 500px; width: 100%; }
+                    #coordinates { 
+                        position: absolute; 
+                        bottom: 20px; 
+                        left: 50%; 
+                        transform: translateX(-50%);
+                        background: white;
+                        padding: 10px;
+                        border-radius: 5px;
+                        z-index: 1000;
+                    }
+                    #copyButton {
+                        margin-left: 10px;
+                        padding: 5px 10px;
+                        cursor: pointer;
+                    }
+                </style>
+            </head>
+            <body>
+                <div id="map"></div>
+                <div id="coordinates">
+                    Click on the map to select your location
+                    <button id="copyButton" onclick="copyCoords()" style="display: none;">Copy Coordinates</button>
+                </div>
+                <script>
+                    // Initialize map
+                    var map = L.map('map').setView([12.9716, 77.5946], 15); // Increased zoom level for better accuracy
+                    
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '© OpenStreetMap contributors'
+                    }).addTo(map);
+
+                    // Add zoom controls
+                    L.control.zoom({
+                        position: 'bottomright',
+                        zoomInTitle: 'Zoom in',
+                        zoomOutTitle: 'Zoom out'
+                    }).addTo(map);
+
+                    var marker;
+                    var currentCoords = '';
+                    
+                    function copyCoords() {
+                        navigator.clipboard.writeText(currentCoords).then(function() {
+                            alert('Coordinates copied to clipboard!');
+                        }).catch(function() {
+                            // Fallback for older browsers
+                            var textArea = document.createElement("textarea");
+                            textArea.value = currentCoords;
+                            document.body.appendChild(textArea);
+                            textArea.select();
+                            document.execCommand('copy');
+                            document.body.removeChild(textArea);
+                            alert('Coordinates copied to clipboard!');
+                        });
+                    }
+                    
+                    // Try to get user's location
+                    map.locate({setView: true, maxZoom: 16});
+                    
+                    map.on('locationfound', function(e) {
+                        if (marker) map.removeLayer(marker);
+                        marker = L.marker(e.latlng).addTo(map);
+                        currentCoords = `${e.latlng.lat.toFixed(6)},${e.latlng.lng.toFixed(6)}`;
+                        document.getElementById('coordinates').innerHTML = `Selected: ${currentCoords} <button id="copyButton" onclick="copyCoords()">Copy Coordinates</button>`;
+                    });
+                    
+                    map.on('click', function(e) {
+                        if (marker) map.removeLayer(marker);
+                        marker = L.marker(e.latlng).addTo(map);
+                        currentCoords = `${e.latlng.lat.toFixed(6)},${e.latlng.lng.toFixed(6)}`;
+                        document.getElementById('coordinates').innerHTML = `Selected: ${currentCoords} <button id="copyButton" onclick="copyCoords()">Copy Coordinates</button>`;
+                    });
+                </script>
+            </body>
+            </html>
+            
